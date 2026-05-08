@@ -18,6 +18,10 @@ COPY server.py .
 COPY config.py .
 COPY utils/ ./utils/
 
+# Pre-download model files (Silero VAD, Turn Detector, etc.) 
+# so they are baked into the image and don't fail at runtime.
+RUN python agent.py download-files
+
 # Hugging Face Spaces exposes port 7860 by default
 ENV PORT=7860
 
