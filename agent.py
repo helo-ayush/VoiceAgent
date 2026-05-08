@@ -15,7 +15,7 @@ from livekit.agents import (
 from livekit.plugins import noise_cancellation, silero
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 from livekit.agents import AgentSession, inference
-from livekit.plugins import sarvam, elevenlabs, groq, cartesia, deepgram, openai
+from livekit.plugins import cartesia, deepgram
 
 # ELEVEN LABS manual REST request method
 # from elevenlabs_http_tts import ElevenLabsHttpTTS
