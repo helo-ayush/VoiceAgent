@@ -21,10 +21,8 @@ from livekit.plugins import cartesia, deepgram
 # from elevenlabs_http_tts import ElevenLabsHttpTTS
 
 
-from config import ACTIVE_LLM
 from utils.prompts import SYSTEM_PROMPT, GREETING_INSTRUCTIONS
 from utils.tools import AssistantTools
-from livekit.plugins import cartesia, deepgram, openai
 
 # ──────────────────────────────────────────────────────────────────────
 # Maximum number of chat messages to keep in context.
@@ -85,11 +83,7 @@ async def entrypoint(ctx: JobContext):
             model="nova-3",
         ),
 
-        llm=openai.LLM(
-            model="gpt-4o" if ACTIVE_LLM == "openai" else "llama-3.3-70b-versatile",
-            base_url="https://api.groq.com/openai/v1" if ACTIVE_LLM == "groq" else None,
-            api_key=os.getenv("GROQ_API_KEY") if ACTIVE_LLM == "groq" else os.getenv("OPENAI_API_KEY")
-        ),
+        llm=inference.LLM(model="openai/gpt-4o"),
 
         # tts=ElevenLabsHttpTTS(
         #     model="eleven_v3",
