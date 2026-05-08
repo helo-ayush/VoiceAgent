@@ -24,6 +24,7 @@ from livekit.plugins import cartesia, deepgram
 from config import ACTIVE_LLM
 from utils.prompts import SYSTEM_PROMPT, GREETING_INSTRUCTIONS
 from utils.tools import AssistantTools
+from livekit.plugins import cartesia, deepgram, openai
 
 # ──────────────────────────────────────────────────────────────────────
 # Maximum number of chat messages to keep in context.
@@ -69,11 +70,6 @@ class Assistant(Agent):
 async def entrypoint(ctx: JobContext):
     fnc_ctx = AssistantTools()
 
-    # Select model string for LiveKit AI Proxy
-    # "gpt" -> OpenAI GPT-4o
-    # "oss" -> Meta Llama 3.3 70B (High-end Open Source)
-    model_name = "openai/gpt-4o" if ACTIVE_LLM == "gpt" else "groq/llama-3.3-70b-versatile"
-
     session = AgentSession(
 
         # Sarvam STT (direct API — higher latency ~1.1s)
@@ -89,8 +85,11 @@ async def entrypoint(ctx: JobContext):
             model="nova-3",
         ),
 
-        # Uses the LiveKit AI Proxy (No direct API keys needed in .env)
-        llm=inference.LLM(model=model_name),
+        llm=openai.LLM(
+            model="gpt-4o" if ACTIVE_LLM == "openai" else "llama-3.3-70b-versatile",
+            base_url="https://api.groq.com/openai/v1" if ACTIVE_LLM == "groq" else None,
+            api_key=os.getenv("GROQ_API_KEY") if ACTIVE_LLM == "groq" else os.getenv("OPENAI_API_KEY")
+        ),
 
         # tts=ElevenLabsHttpTTS(
         #     model="eleven_v3",
