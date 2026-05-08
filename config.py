@@ -11,4 +11,4 @@ ACTIVE_PERSONALITY = "neutral"
 # ║  Available options: "openai", "groq"                                ║
 # ╚══════════════════════════════════════════════════════════════════════╝
 
-ACTIVE_LLM = "openai"
+ACTIVE_LLM = "groq"
