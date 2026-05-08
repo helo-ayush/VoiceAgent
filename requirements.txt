@@ -1,0 +1,11 @@
+python-dotenv
+livekit-agents[codecs]
+livekit-plugins-silero
+livekit-plugins-noise-cancellation
+livekit-plugins-deepgram
+livekit-plugins-openai
+livekit-plugins-cartesia
+livekit-plugins-turn-detector
+livekit-api
+fastapi
+uvicorn[standard]
