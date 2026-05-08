@@ -7,8 +7,8 @@
 ACTIVE_PERSONALITY = "neutral"
 
 # ╔══════════════════════════════════════════════════════════════════════╗
-# ║  LLM CONFIGURATION                                                  ║
-# ║  Available options: "openai", "groq"                                ║
+# ║  LLM CONFIGURATION (Uses LiveKit AI Proxy - No API Keys Needed)     ║
+# ║  Available options: "gpt" (GPT-4o), "oss" (Llama 3.3 70B)           ║
 # ╚══════════════════════════════════════════════════════════════════════╝
 
-ACTIVE_LLM = "groq"
+ACTIVE_LLM = "oss"
