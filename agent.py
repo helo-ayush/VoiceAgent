@@ -68,10 +68,12 @@ class Assistant(Agent):
 async def entrypoint(ctx: JobContext):
     fnc_ctx = AssistantTools()
 
-    # Select LLM based on config using the inference interface
+    # Select LLM based on config
     if ACTIVE_LLM == "groq":
-        llm_engine = inference.LLM(model="groq/llama3-70b-8192")
+        from livekit.plugins import groq
+        llm_engine = groq.LLM(model="llama3-70b-8192")
     else:
+        # Use the inference interface for OpenAI to utilize the LiveKit AI Proxy
         llm_engine = inference.LLM(model="openai/gpt-4o")
 
     session = AgentSession(
