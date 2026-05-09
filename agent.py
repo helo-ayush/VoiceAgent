@@ -15,8 +15,8 @@ from livekit.agents import (
 from livekit.plugins import noise_cancellation, silero
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 from livekit.agents import AgentSession, inference
-from livekit.plugins import cartesia, deepgram
-from config import MAX_CONTEXT_ITEMS, ACTIVE_LLM
+from livekit.plugins import cartesia, deepgram, groq
+from config import MAX_CONTEXT_ITEMS, ACTIVE_LLM, ACTIVE_PERSONALITY
 
 # ELEVEN LABS manual REST request method
 # from elevenlabs_http_tts import ElevenLabsHttpTTS
@@ -79,8 +79,7 @@ async def entrypoint(ctx: JobContext):
 
     # Select LLM based on user choice (fallback to config)
     if llm_choice == "groq":
-        from livekit.plugins import groq
-        llm_engine = groq.LLM(model="llama3-70b-8192")
+        llm_engine = groq.LLM(model="openai/gpt-oss-120b")
     else:
         # Use the inference interface for OpenAI to utilize the LiveKit AI Proxy
         llm_engine = inference.LLM(model="openai/gpt-4o")
