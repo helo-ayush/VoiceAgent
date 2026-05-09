@@ -16,6 +16,7 @@ from livekit.plugins import noise_cancellation, silero
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 from livekit.agents import AgentSession, inference
 from livekit.plugins import cartesia, deepgram
+from config import MAX_CONTEXT_ITEMS, ACTIVE_LLM
 
 # ELEVEN LABS manual REST request method
 # from elevenlabs_http_tts import ElevenLabsHttpTTS
@@ -29,7 +30,6 @@ from utils.tools import AssistantTools
 # Older messages are automatically trimmed to keep LLM fast and cheap.
 # The system prompt is always preserved regardless of this limit.
 # ──────────────────────────────────────────────────────────────────────
-MAX_CONTEXT_ITEMS = 20
 
 class Assistant(Agent):
     def __init__(self) -> None:
@@ -68,14 +68,15 @@ class Assistant(Agent):
 async def entrypoint(ctx: JobContext):
     fnc_ctx = AssistantTools()
 
-    session = AgentSession(
+    # Select LLM based on config
+    if ACTIVE_LLM == "groq":
+        from livekit.plugins import groq
+        llm_engine = groq.LLM(model="llama3-70b-8192")
+    else:
+        from livekit.plugins import openai
+        llm_engine = openai.LLM(model="gpt-4o")
 
-        # Sarvam STT (direct API — higher latency ~1.1s)
-        # stt=sarvam.STT(
-        #     language="en-IN",
-        #     model="saaras:v3",
-        #     mode="transcribe",
-        # ),
+    session = AgentSession(
 
         # Deepgram STT (Streaming - much faster)
         stt=deepgram.STT(
@@ -83,7 +84,7 @@ async def entrypoint(ctx: JobContext):
             model="nova-3",
         ),
 
-        llm=inference.LLM(model="openai/gpt-4o"),
+        llm=llm_engine,
 
         # tts=ElevenLabsHttpTTS(
         #     model="eleven_v3",

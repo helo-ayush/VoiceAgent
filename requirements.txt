@@ -9,3 +9,4 @@ livekit-plugins-turn-detector
 livekit-api
 fastapi
 uvicorn[standard]
+livekit-plugins-groq
