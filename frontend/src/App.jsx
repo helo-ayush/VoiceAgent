@@ -19,13 +19,15 @@ function App() {
   const [connectionDetails, setConnectionDetails] = useState(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState(null);
+  const [personality, setPersonality] = useState("neutral");
+  const [llm, setLlm] = useState("openai");
 
   const connect = async () => {
     try {
       setIsConnecting(true);
       setError(null);
-      // Fetch the token from our FastAPI backend
-      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/getToken`);
+      // Fetch the token from our FastAPI backend with user preferences
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/getToken?personality=${personality}&llm=${llm}`);
       const data = await response.json();
 
       if (data.error) {
@@ -79,8 +81,35 @@ function App() {
           <div className="flex-1 flex flex-col items-center justify-center">
             <h1 className="text-2xl font-semibold mb-6">Voice Assistant</h1>
             <p className="text-neutral-500 mb-8 text-center max-w-md">
-              Click connect to spawn an isolated instance of the LiveKit voice agent.
+              Configure your agent and click connect to spawn an isolated instance.
             </p>
+            
+            <div className="flex gap-4 mb-8">
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-neutral-600">Personality</label>
+                <select 
+                  value={personality} 
+                  onChange={(e) => setPersonality(e.target.value)}
+                  className="px-4 py-2 bg-white border border-neutral-200 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                >
+                  <option value="neutral">Helpful Friend (Neo)</option>
+                  <option value="savage">Sarcastic Roaster</option>
+                  <option value="genz">Hyper Gen-Z</option>
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-neutral-600">LLM Provider</label>
+                <select 
+                  value={llm} 
+                  onChange={(e) => setLlm(e.target.value)}
+                  className="px-4 py-2 bg-white border border-neutral-200 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                >
+                  <option value="openai">OpenAI (GPT-4o)</option>
+                  <option value="groq">Groq (Llama-3 70B)</option>
+                </select>
+              </div>
+            </div>
           </div>
         )}
 

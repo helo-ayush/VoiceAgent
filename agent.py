@@ -22,20 +22,16 @@ from config import MAX_CONTEXT_ITEMS, ACTIVE_LLM
 # from elevenlabs_http_tts import ElevenLabsHttpTTS
 
 
-from utils.prompts import SYSTEM_PROMPT, GREETING_INSTRUCTIONS
+from utils.prompts import get_personality
 from utils.tools import AssistantTools
-
-# ──────────────────────────────────────────────────────────────────────
-# Maximum number of chat messages to keep in context.
-# Older messages are automatically trimmed to keep LLM fast and cheap.
-# The system prompt is always preserved regardless of this limit.
-# ──────────────────────────────────────────────────────────────────────
+import json
 
 class Assistant(Agent):
-    def __init__(self) -> None:
+    def __init__(self, system_prompt: str, greeting_instructions: str) -> None:
         super().__init__(
-            instructions=SYSTEM_PROMPT,
+            instructions=system_prompt,
         )
+        self.greeting_instructions = greeting_instructions
 
     async def on_enter(self) -> None:
         """
@@ -44,7 +40,7 @@ class Assistant(Agent):
         they don't have to speak first.
         """
         self.session.generate_reply(
-            instructions=GREETING_INSTRUCTIONS
+            instructions=self.greeting_instructions
         )
 
     async def on_user_turn_completed(
@@ -63,13 +59,26 @@ class Assistant(Agent):
         turn_ctx.truncate(max_items=MAX_CONTEXT_ITEMS)
 
 
-
-
 async def entrypoint(ctx: JobContext):
+    # Connect to the room first so we can read user metadata
+    await ctx.connect()
+    participant = await ctx.wait_for_participant()
+    
+    # Parse frontend choices from the token metadata
+    try:
+        metadata = json.loads(participant.metadata) if participant.metadata else {}
+    except Exception:
+        metadata = {}
+        
+    personality_name = metadata.get("personality", ACTIVE_PERSONALITY)
+    llm_choice = metadata.get("llm", ACTIVE_LLM)
+    
+    system_prompt, greeting = get_personality(personality_name)
+    
     fnc_ctx = AssistantTools()
 
-    # Select LLM based on config
-    if ACTIVE_LLM == "groq":
+    # Select LLM based on user choice (fallback to config)
+    if llm_choice == "groq":
         from livekit.plugins import groq
         llm_engine = groq.LLM(model="llama3-70b-8192")
     else:
@@ -116,14 +125,12 @@ async def entrypoint(ctx: JobContext):
     fnc_ctx.session = session
 
     await session.start(
-        agent=Assistant(),
+        agent=Assistant(system_prompt=system_prompt, greeting_instructions=greeting),
         room=ctx.room,
         room_input_options=RoomInputOptions(
             noise_cancellation=noise_cancellation.BVC(),
         ),
     )
-
-    await ctx.connect()
 
 if __name__ == "__main__":
     cli.run_app(

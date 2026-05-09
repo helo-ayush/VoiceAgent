@@ -146,9 +146,16 @@ Do NOT be formal.
 
 
 # ──────────────────────────────────────────────────────────────────────
-# Export the active personality based on config
+# Export the active personality dynamically
 # ──────────────────────────────────────────────────────────────────────
 
-_active = PERSONALITIES[ACTIVE_PERSONALITY]
-SYSTEM_PROMPT = _active["system"].format(shared=SHARED_RULES).strip()
-GREETING_INSTRUCTIONS = _active["greeting"].strip()
+def get_personality(name: str):
+    # Default to neutral if an unknown personality is requested
+    if name not in PERSONALITIES:
+        name = "neutral"
+        
+    _active = PERSONALITIES[name]
+    system_prompt = _active["system"].format(shared=SHARED_RULES).strip()
+    greeting = _active["greeting"].strip()
+    
+    return system_prompt, greeting

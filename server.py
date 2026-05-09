@@ -20,8 +20,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+import json
+
 @app.get("/getToken")
-async def get_token():
+async def get_token(personality: str = "neutral", llm: str = "openai"):
     # 1. Create a truly unique room name for this specific user session
     room_name = f"room-user-{uuid.uuid4().hex[:8]}"
     
@@ -36,12 +38,16 @@ async def get_token():
     if not api_key or not api_secret:
         return {"error": "Missing LIVEKIT_API_KEY or LIVEKIT_API_SECRET"}
 
-    # 3. Create the JWT Token with permissions to join ONLY this specific room
+    # 3. Create metadata JSON
+    metadata = json.dumps({"personality": personality, "llm": llm})
+
+    # 4. Create the JWT Token with permissions to join ONLY this specific room
     token = AccessToken(
         api_key,
         api_secret
     ).with_identity(participant_identity) \
      .with_name("Human") \
+     .with_metadata(metadata) \
      .with_grants(VideoGrants(
          room_join=True,
          room=room_name,
