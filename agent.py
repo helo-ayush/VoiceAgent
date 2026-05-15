@@ -85,7 +85,6 @@ async def entrypoint(ctx: JobContext):
         llm_engine = inference.LLM(model="openai/gpt-4o")
 
     session = AgentSession(
-
         # Deepgram STT (Streaming - much faster)
         stt=deepgram.STT(
             language="hi",
@@ -113,10 +112,13 @@ async def entrypoint(ctx: JobContext):
         ),
 
         vad=silero.VAD.load(
+            activation_threshold=0.1, # Extremely sensitive to catch the very first sound
             min_silence_duration=0.3, # Detect end of speech faster
-            min_speech_duration=0.05, # Extremely sensitive to user barge-in
+            min_speech_duration=0.01, # React instantly to speech
         ),
         turn_detection=MultilingualModel(),
+        min_interruption_duration=0.01,
+        min_interruption_words=0, # Interrupt on any VAD activation, don't wait for full words
         tools=llm.find_function_tools(fnc_ctx),
     )
 
