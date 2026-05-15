@@ -128,9 +128,6 @@ async def entrypoint(ctx: JobContext):
     await session.start(
         agent=Assistant(system_prompt=system_prompt, greeting_instructions=greeting),
         room=ctx.room,
-        room_input_options=RoomInputOptions(
-            noise_cancellation=noise_cancellation.BVC(),
-        ),
     )
 
 if __name__ == "__main__":
