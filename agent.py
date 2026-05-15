@@ -112,9 +112,9 @@ async def entrypoint(ctx: JobContext):
         ),
 
         vad=silero.VAD.load(
-            activation_threshold=0.1, # Extremely sensitive to catch the very first sound
-            min_silence_duration=0.3, # Detect end of speech faster
-            min_speech_duration=0.01, # React instantly to speech
+            activation_threshold=0.4, # Balanced sensitivity to ignore background noise
+            min_silence_duration=0.3, 
+            min_speech_duration=0.04, 
         ),
         turn_detection=MultilingualModel(),
         min_interruption_duration=0.01,
