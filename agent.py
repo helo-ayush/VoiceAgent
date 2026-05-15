@@ -13,7 +13,7 @@ from livekit.agents import (
 )
 
 from livekit.plugins import noise_cancellation, silero
-from livekit.plugins.turn_detector.multilingual import MultilingualModel
+
 from livekit.agents import AgentSession, inference
 from livekit.plugins import cartesia, deepgram, groq
 from config import MAX_CONTEXT_ITEMS, ACTIVE_LLM, ACTIVE_PERSONALITY
@@ -116,9 +116,7 @@ async def entrypoint(ctx: JobContext):
             min_silence_duration=0.3, 
             min_speech_duration=0.04, 
         ),
-        turn_detection=MultilingualModel(),
-        min_interruption_duration=0.01,
-        min_interruption_words=0, # Interrupt on any VAD activation, don't wait for full words
+        # Removed MultilingualModel: Falling back to pure VAD turn detector for zero-latency interruptions
         tools=llm.find_function_tools(fnc_ctx),
     )
 
