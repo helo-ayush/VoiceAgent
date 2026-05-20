@@ -194,15 +194,15 @@ function VoiceAssistantUI() {
             </div>
             <div className="flex items-center gap-2 bg-white/50 backdrop-blur-md border border-neutral-200 px-3 py-1.5 rounded-full text-xs font-medium text-neutral-600 shadow-sm">
               <span className="w-2 h-2 rounded-full bg-blue-500" />
-              <span>STT (Deepgram): {metrics.stt > 0 ? `${metrics.stt}ms` : "-"}</span>
+              <span>STT (Deepgram): {metrics.stt > 0 ? `${metrics.stt}ms` : "waiting..."}</span>
             </div>
             <div className="flex items-center gap-2 bg-white/50 backdrop-blur-md border border-neutral-200 px-3 py-1.5 rounded-full text-xs font-medium text-neutral-600 shadow-sm">
               <span className="w-2 h-2 rounded-full bg-purple-500" />
-              <span>LLM (TTFT): {metrics.llm > 0 ? `${metrics.llm}ms` : "-"}</span>
+              <span>LLM (TTFT): {metrics.llm > 0 ? `${metrics.llm}ms` : "waiting..."}</span>
             </div>
             <div className="flex items-center gap-2 bg-white/50 backdrop-blur-md border border-neutral-200 px-3 py-1.5 rounded-full text-xs font-medium text-neutral-600 shadow-sm">
               <span className="w-2 h-2 rounded-full bg-orange-500" />
-              <span>TTS (TTFB): {metrics.tts > 0 ? `${metrics.tts}ms` : "-"}</span>
+              <span>TTS (TTFB): {metrics.tts > 0 ? `${metrics.tts}ms` : "waiting..."}</span>
             </div>
           </>
         )}

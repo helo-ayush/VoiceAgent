@@ -105,7 +105,10 @@ async def entrypoint(ctx: JobContext):
         llm_engine = inference.LLM(model="openai/gpt-4o")
 
     # Initialize nodes separately to hook into their metrics
-    stt_engine = deepgram.STT(language="hi")
+    stt_engine = deepgram.STTv2(
+        model="flux-general-multi",
+        language_hint=["hi", "en"],
+    )
     tts_engine = cartesia.TTS(
         model="sonic-3-latest",
         language="hi",
@@ -156,11 +159,13 @@ async def entrypoint(ctx: JobContext):
     @session.on("metrics_collected")
     def on_metrics_collected(event):
         m = event.metrics
-        if hasattr(m, "transcription_delay") and m.transcription_delay > 0:
-            _send_metric("stt", int(m.transcription_delay * 1000))
-        elif hasattr(m, "ttft") and m.ttft > 0:
+        if hasattr(m, "transcription_delay") and m.transcription_delay is not None:
+            delay = m.transcription_delay if m.transcription_delay > 0 else getattr(m, "end_of_utterance_delay", 0.0)
+            if delay > 0:
+                _send_metric("stt", int(delay * 1000))
+        if hasattr(m, "ttft") and m.ttft > 0:
             _send_metric("llm", int(m.ttft * 1000))
-        elif hasattr(m, "ttfb") and m.ttfb > 0:
+        if hasattr(m, "ttfb") and m.ttfb > 0:
             _send_metric("tts", int(m.ttfb * 1000))
 
     fnc_ctx.session = session
