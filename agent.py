@@ -57,14 +57,6 @@ class Assistant(Agent):
         turn_ctx.truncate(max_items=MAX_CONTEXT_ITEMS)
 
 
-class CustomAgentSession(AgentSession):
-    async def _update_activity(self, *args, **kwargs) -> None:
-        await super()._update_activity(*args, **kwargs)
-        if self._activity is not None:
-            # Keep VAD interruption active by preventing the SDK from disabling it
-            self._activity._disable_vad_interruption_soon = lambda: None
-            self._activity._interruption_by_audio_activity_enabled = True
-
 async def entrypoint(ctx: JobContext):
     # Connect to the room first so we can read user metadata
     await ctx.connect()
@@ -116,23 +108,27 @@ async def entrypoint(ctx: JobContext):
         sample_rate=24000,
     )
 
-    session = CustomAgentSession(
+    session = AgentSession(
         # Deepgram STT (Supports streaming and word alignments for Adaptive Interruption)
         stt=stt_engine,
         llm=llm_engine,
         tts=tts_engine,
         vad=silero.VAD.load(
-            min_silence_duration=0.3, # Detect end of speech faster
-            min_speech_duration=0.05, # Extremely sensitive to user barge-in
-            activation_threshold=0.4, # More sensitive to speech onset
+            min_silence_duration=0.3, # 300ms silence detection
+            min_speech_duration=0.25, # Ignore short breaths/clicks (250ms)
+            activation_threshold=0.6, # Noise-resilient onset threshold
+            deactivation_threshold=0.48, # High-threshold to prevent silence-lockup on fan noise
         ),
         # turn_detection=MultilingualModel(),
         turn_handling={
             "interruption": {
-                "min_duration": 0.15, # Responsiveness without being overly sensitive to quick breath or noise
+                "mode": "adaptive",
+                "min_duration": 0.3, # Responsiveness without being overly sensitive to quick breath or noise
                 "resume_false_interruption": False,
+                "min_words": 1,      # Requires transcribing 1+ words to interrupt (prevents fan noise barge-in)
             },
             "endpointing": {
+                "mode": "fixed",
                 "min_delay": 0.3, # Reduce endpointing silence delay to 300ms (blazingly fast responses)
             },
             "preemptive_generation": {
