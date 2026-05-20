@@ -13,9 +13,9 @@ from livekit.agents import (
 )
 
 from livekit.plugins import noise_cancellation, silero
-
+from livekit.plugins.turn_detector.multilingual import MultilingualModel
 from livekit.agents import AgentSession, inference
-from livekit.plugins import cartesia, deepgram, groq
+from livekit.plugins import cartesia, deepgram, groq, sarvam
 from config import MAX_CONTEXT_ITEMS, ACTIVE_LLM, ACTIVE_PERSONALITY
 
 # ELEVEN LABS manual REST request method
@@ -39,9 +39,7 @@ class Assistant(Agent):
         We use this to proactively greet the user so
         they don't have to speak first.
         """
-        self.session.generate_reply(
-            instructions=self.greeting_instructions
-        )
+        self.session.say(self.greeting_instructions, allow_interruptions=True)
 
     async def on_user_turn_completed(
         self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage
@@ -59,19 +57,41 @@ class Assistant(Agent):
         turn_ctx.truncate(max_items=MAX_CONTEXT_ITEMS)
 
 
+class CustomAgentSession(AgentSession):
+    async def _update_activity(self, *args, **kwargs) -> None:
+        await super()._update_activity(*args, **kwargs)
+        if self._activity is not None:
+            # Keep VAD interruption active by preventing the SDK from disabling it
+            self._activity._disable_vad_interruption_soon = lambda: None
+            self._activity._interruption_by_audio_activity_enabled = True
+
 async def entrypoint(ctx: JobContext):
     # Connect to the room first so we can read user metadata
     await ctx.connect()
     participant = await ctx.wait_for_participant()
     
-    # Parse frontend choices from the token metadata
+    # Parse frontend choices from the token metadata (wait for sync if needed)
+    metadata_str = participant.metadata
+    if not metadata_str:
+        logging.info("Participant metadata is empty. Waiting for metadata update...")
+        for i in range(10):  # wait up to 1.0 seconds
+            await asyncio.sleep(0.1)
+            participant = ctx.room.remote_participants.get(participant.identity) or participant
+            metadata_str = participant.metadata
+            if metadata_str:
+                logging.info(f"Metadata sync complete after {i+1} retries: {metadata_str}")
+                break
+                
     try:
-        metadata = json.loads(participant.metadata) if participant.metadata else {}
-    except Exception:
+        metadata = json.loads(metadata_str) if metadata_str else {}
+    except Exception as e:
+        logging.error(f"Failed to parse participant metadata: {e}")
         metadata = {}
         
     personality_name = metadata.get("personality", ACTIVE_PERSONALITY)
     llm_choice = metadata.get("llm", ACTIVE_LLM)
+    
+    logging.info(f"Dynamic configuration: LLM = {llm_choice}, Personality = {personality_name}")
     
     system_prompt, greeting = get_personality(personality_name)
     
@@ -84,48 +104,73 @@ async def entrypoint(ctx: JobContext):
         # Use the inference interface for OpenAI to utilize the LiveKit AI Proxy
         llm_engine = inference.LLM(model="openai/gpt-4o")
 
-    session = AgentSession(
-        # Deepgram STT (Streaming - much faster)
-        stt=deepgram.STT(
-            language="hi",
-            model="nova-3",
-        ),
+    # Initialize nodes separately to hook into their metrics
+    stt_engine = deepgram.STT(language="hi")
+    tts_engine = cartesia.TTS(
+        model="sonic-3-latest",
+        language="hi",
+        voice="95d51f79-c397-46f9-b49a-23763d3eaa2d",
+        sample_rate=24000,
+    )
 
+    session = CustomAgentSession(
+        # Deepgram STT (Supports streaming and word alignments for Adaptive Interruption)
+        stt=stt_engine,
         llm=llm_engine,
-
-        # tts=ElevenLabsHttpTTS(
-        #     model="eleven_v3",
-        #     voice_id="EXAVITQu4vr4xnSDxMaL",
-        # ),
-
-        # ElevenLabs TTS via LiveKit inference (great quality, high latency ~2.5s)
-        # tts=inference.TTS(
-        #     model="elevenlabs/eleven_v3", 
-        #     voice="Ms9OTvWb99V6DwRHZn6q",
-        # ),
-
-        tts=cartesia.TTS(
-            model="sonic-3-latest",
-            language="hi",
-            voice="95d51f79-c397-46f9-b49a-23763d3eaa2d",
-            sample_rate=24000,
-        ),
-
+        tts=tts_engine,
         vad=silero.VAD.load(
-            activation_threshold=0.4, # Balanced sensitivity to ignore background noise
-            min_silence_duration=0.3, 
-            min_speech_duration=0.04, 
+            min_silence_duration=0.3, # Detect end of speech faster
+            min_speech_duration=0.05, # Extremely sensitive to user barge-in
+            activation_threshold=0.4, # More sensitive to speech onset
         ),
-        # Removed MultilingualModel: Falling back to pure VAD turn detector for zero-latency interruptions
+        # turn_detection=MultilingualModel(),
+        turn_handling={
+            "interruption": {
+                "min_duration": 0.15, # Responsiveness without being overly sensitive to quick breath or noise
+                "resume_false_interruption": False,
+            },
+            "endpointing": {
+                "min_delay": 0.3, # Reduce endpointing silence delay to 300ms (blazingly fast responses)
+            },
+            "preemptive_generation": {
+                "enabled": True,
+                "preemptive_tts": True, # Pre-generate TTS audio for near-zero reply latency
+            }
+        },
         tools=llm.find_function_tools(fnc_ctx),
     )
 
+    import asyncio
+    import json
     
+    def _send_metric(metric_type, latency_ms):
+        print(f"METRIC COLLECTED: {metric_type} = {latency_ms}ms")
+        if ctx.room.local_participant:
+            asyncio.create_task(
+                ctx.room.local_participant.publish_data(
+                    json.dumps({"type": metric_type, "latency": latency_ms}).encode("utf-8"), 
+                    topic="agent_metrics"
+                )
+            )
+
+    @session.on("metrics_collected")
+    def on_metrics_collected(event):
+        m = event.metrics
+        if hasattr(m, "transcription_delay") and m.transcription_delay > 0:
+            _send_metric("stt", int(m.transcription_delay * 1000))
+        elif hasattr(m, "ttft") and m.ttft > 0:
+            _send_metric("llm", int(m.ttft * 1000))
+        elif hasattr(m, "ttfb") and m.ttfb > 0:
+            _send_metric("tts", int(m.ttfb * 1000))
+
     fnc_ctx.session = session
 
     await session.start(
         agent=Assistant(system_prompt=system_prompt, greeting_instructions=greeting),
         room=ctx.room,
+        room_input_options=RoomInputOptions(
+            noise_cancellation=noise_cancellation.BVC(),
+        ),
     )
 
 if __name__ == "__main__":

@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef } from "react";
 import { Mic, Square } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  LiveKitRoom, 
-  useVoiceAssistant, 
+import {
+  LiveKitRoom,
+  useVoiceAssistant,
   RoomAudioRenderer,
   useConnectionState,
   useLocalParticipant,
   useTracks,
+  useDataChannel,
   ConnectionQualityIndicator,
   useRoomContext
 } from "@livekit/components-react";
@@ -66,9 +67,9 @@ function App() {
             serverUrl={connectionDetails.serverUrl}
             token={connectionDetails.token}
             connect={true}
-            audio={{ 
-              echoCancellation: true, 
-              noiseSuppression: true, 
+            audio={{
+              echoCancellation: true,
+              noiseSuppression: true,
               autoGainControl: true,
             }}
             onDisconnected={disconnect}
@@ -83,16 +84,16 @@ function App() {
             <p className="text-neutral-500 mb-8 text-center max-w-md">
               Configure your agent and click connect to spawn an isolated instance.
             </p>
-            
+
             <div className="flex gap-4 mb-8">
               <div className="flex flex-col gap-2">
                 <label className="text-sm font-medium text-neutral-600">Personality</label>
-                <select 
-                  value={personality} 
+                <select
+                  value={personality}
                   onChange={(e) => setPersonality(e.target.value)}
                   className="px-4 py-2 bg-white border border-neutral-200 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-neutral-900"
                 >
-                  <option value="neutral">Helpful Friend (Neo)</option>
+                  <option value="neutral">Helpful Friend</option>
                   <option value="savage">Sarcastic Roaster</option>
                   <option value="genz">Hyper Gen-Z</option>
                 </select>
@@ -100,13 +101,13 @@ function App() {
 
               <div className="flex flex-col gap-2">
                 <label className="text-sm font-medium text-neutral-600">LLM Provider</label>
-                <select 
-                  value={llm} 
+                <select
+                  value={llm}
                   onChange={(e) => setLlm(e.target.value)}
                   className="px-4 py-2 bg-white border border-neutral-200 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-neutral-900"
                 >
                   <option value="openai">OpenAI (GPT-4o)</option>
-                  <option value="groq">Groq (Llama-3 70B)</option>
+                  <option value="groq">Groq (GPT-OSS 120B)</option>
                 </select>
               </div>
             </div>
@@ -122,8 +123,8 @@ function App() {
             onClick={connectionDetails ? disconnect : connect}
             disabled={isConnecting}
             className={`relative z-10 w-24 h-24 rounded-full flex items-center justify-center transition-all duration-500 shadow-[0_8px_30px_rgb(0,0,0,0.06)] hover:shadow-[0_12px_40px_rgb(0,0,0,0.08)] focus:outline-none focus:ring-2 focus:ring-offset-4 focus:ring-offset-[#FDFCF8]
-              ${connectionDetails 
-                ? "bg-white text-red-500" 
+              ${connectionDetails
+                ? "bg-white text-red-500"
                 : "bg-neutral-900 text-white hover:bg-neutral-800"
               } ${isConnecting ? "opacity-50 cursor-not-allowed" : ""}`
             }
@@ -143,18 +144,20 @@ function VoiceAssistantUI() {
   const connectionState = useConnectionState();
   const { localParticipant } = useLocalParticipant();
 
-  // Track Conversational Latency (Thinking -> Speaking time)
-  const [latencyMs, setLatencyMs] = useState(0);
-  const thinkingStartTime = useRef(0);
+  // Track Detailed Conversational Latency
+  const [metrics, setMetrics] = useState({ stt: 0, llm: 0, tts: 0 });
 
-  useEffect(() => {
-    if (state === "thinking") {
-      thinkingStartTime.current = Date.now();
-    } else if (state === "speaking" && thinkingStartTime.current > 0) {
-      setLatencyMs(Date.now() - thinkingStartTime.current);
-      thinkingStartTime.current = 0;
+  useDataChannel((msg) => {
+    if (msg.topic === "agent_metrics") {
+      console.log("RECEIVED METRICS MSG:", msg);
+      try {
+        const data = JSON.parse(new TextDecoder().decode(msg.payload));
+        setMetrics((prev) => ({ ...prev, [data.type]: data.latency }));
+      } catch (e) {
+        console.error("Failed to parse agent metrics", e);
+      }
     }
-  }, [state]);
+  });
 
   // Ensure we actively track the microphone publication
   const localTracks = useTracks([Track.Source.Microphone]);
@@ -180,32 +183,40 @@ function VoiceAssistantUI() {
 
   return (
     <div className="flex-1 flex flex-col justify-end items-center w-full relative pb-10">
-      
+
       {/* Network & Status Details */}
       <div className="absolute top-0 left-0 flex flex-col gap-3">
-         {connectionState === "connected" && (
-           <div className="flex items-center gap-2 bg-white/50 backdrop-blur-md border border-neutral-200 px-3 py-1.5 rounded-full text-xs font-medium text-neutral-600 shadow-sm">
-             <ConnectionQualityIndicator participant={localParticipant} />
-             <span>LiveKit Network</span>
-           </div>
-         )}
-         {latencyMs > 0 && (
-           <div className="flex items-center gap-2 bg-white/50 backdrop-blur-md border border-neutral-200 px-3 py-1.5 rounded-full text-xs font-medium text-neutral-600 shadow-sm">
-             <span className="w-2 h-2 rounded-full bg-blue-500" />
-             <span>Agent Latency: {latencyMs}ms</span>
-           </div>
-         )}
+        {connectionState === "connected" && (
+          <>
+            <div className="flex items-center gap-2 bg-white/50 backdrop-blur-md border border-neutral-200 px-3 py-1.5 rounded-full text-xs font-medium text-neutral-600 shadow-sm">
+              <ConnectionQualityIndicator participant={localParticipant} />
+              <span>LiveKit Network</span>
+            </div>
+            <div className="flex items-center gap-2 bg-white/50 backdrop-blur-md border border-neutral-200 px-3 py-1.5 rounded-full text-xs font-medium text-neutral-600 shadow-sm">
+              <span className="w-2 h-2 rounded-full bg-blue-500" />
+              <span>STT (Deepgram): {metrics.stt > 0 ? `${metrics.stt}ms` : "-"}</span>
+            </div>
+            <div className="flex items-center gap-2 bg-white/50 backdrop-blur-md border border-neutral-200 px-3 py-1.5 rounded-full text-xs font-medium text-neutral-600 shadow-sm">
+              <span className="w-2 h-2 rounded-full bg-purple-500" />
+              <span>LLM (TTFT): {metrics.llm > 0 ? `${metrics.llm}ms` : "-"}</span>
+            </div>
+            <div className="flex items-center gap-2 bg-white/50 backdrop-blur-md border border-neutral-200 px-3 py-1.5 rounded-full text-xs font-medium text-neutral-600 shadow-sm">
+              <span className="w-2 h-2 rounded-full bg-orange-500" />
+              <span>TTS (TTFB): {metrics.tts > 0 ? `${metrics.tts}ms` : "-"}</span>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Visualizer & Status text (Pushed to bottom) */}
       <div className="w-full flex flex-col items-center justify-center opacity-80 relative">
         <div className="flex items-center justify-center gap-2 text-xs font-semibold text-neutral-400 tracking-widest uppercase mb-2 z-10">
           {connectionState === "connected" && (
-             <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
+            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
           )}
           {getStatusText()}
         </div>
-        
+
         {/* Dual Overlapping Visualizers */}
         <div className="h-24 w-full max-w-sm flex items-center justify-center relative">
 
@@ -244,7 +255,7 @@ function CanvasVisualizer({ trackRef, color }) {
     if (!canvasRef.current) return;
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
-    
+
     // Attempt to extract the raw MediaStreamTrack
     let mediaStreamTrack = null;
     let localStream = null;
