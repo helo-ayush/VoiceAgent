@@ -108,6 +108,9 @@ async def entrypoint(ctx: JobContext):
     stt_engine = deepgram.STTv2(
         model="flux-general-multi",
         language_hint=["hi", "en"],
+        eot_threshold=0.55,
+        eot_timeout_ms=1000,
+        eager_eot_threshold=0.35,
     )
     tts_engine = cartesia.TTS(
         model="sonic-3-latest",
@@ -122,9 +125,10 @@ async def entrypoint(ctx: JobContext):
         llm=llm_engine,
         tts=tts_engine,
         vad=silero.VAD.load(
-            min_silence_duration=0.3, # Detect end of speech faster
-            min_speech_duration=0.05, # Extremely sensitive to user barge-in
-            activation_threshold=0.4, # More sensitive to speech onset
+            min_silence_duration=0.3, # 300ms silence detection
+            min_speech_duration=0.15, # Ignore short breaths/clicks (150ms)
+            activation_threshold=0.5, # More robust onset threshold
+            deactivation_threshold=0.35, # Robust deactivation threshold to prevent freezing on noise
         ),
         # turn_detection=MultilingualModel(),
         turn_handling={
