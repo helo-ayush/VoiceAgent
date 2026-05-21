@@ -60,6 +60,22 @@ class InterruptibleAgentActivity(AgentActivity):
     def _disable_vad_interruption_soon(self) -> None:
         pass
 
+    def on_start_of_speech(
+        self,
+        ev,
+        speech_start_time: float,
+    ) -> None:
+        # Run full SDK setup first (overlap/endpointing), then interrupt.
+        super().on_start_of_speech(ev, speech_start_time)
+        if (
+            self._session.agent_state == "speaking"
+            and self._current_speech is not None
+            and not self._current_speech.interrupted
+            and self._current_speech.allow_interruptions
+        ):
+            self._interruption_by_audio_activity_enabled = True
+            self._interrupt_by_audio_activity()
+
 
 _patches_applied = False
 
@@ -84,7 +100,7 @@ def get_barge_in_room_input_options() -> RoomInputOptions:
 
 
 def try_barge_in(session: AgentSession) -> None:
-    """Force-stop agent speech when the user talks over the agent."""
+    """Stop agent speech using the SDK overlap path (keeps turn detection in sync)."""
     if session.agent_state != "speaking" or session._activity is None:
         return
     activity = session._activity
@@ -93,21 +109,21 @@ def try_barge_in(session: AgentSession) -> None:
         return
     activity._interruption_by_audio_activity_enabled = True
     try:
-        activity.interrupt(force=True)
+        activity._interrupt_by_audio_activity()
     except Exception as e:
         logger.warning("barge-in interrupt failed: %s", e)
 
 
 def register_barge_in_handlers(session: AgentSession) -> None:
-    """Wire session events that trigger immediate barge-in."""
+    """Wire session events that trigger barge-in.
 
-    @session.on("user_state_changed")
-    def _on_user_state_changed(ev) -> None:
-        if ev.new_state == "speaking":
-            try_barge_in(session)
+    Do not interrupt from user_state_changed — that event fires mid on_start_of_speech
+    before overlap/endpointing is configured, which drops the first post-interrupt turn.
+    """
 
     @session.on("user_input_transcribed")
     def _on_user_transcript(ev) -> None:
+        # Backup when STT sees speech but VAD onset was missed during agent playback.
         if not ev.is_final and ev.transcript.strip():
             try_barge_in(session)
 
