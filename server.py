@@ -23,7 +23,7 @@ app.add_middleware(
 import json
 
 @app.get("/getToken")
-async def get_token(personality: str = "neutral", llm: str = "openai"):
+async def get_token(personality: str = "neutral", llm: str = "openai", stt: str = "deepgram"):
     # 1. Create a truly unique room name for this specific user session
     room_name = f"room-user-{uuid.uuid4().hex[:8]}"
     
@@ -39,7 +39,7 @@ async def get_token(personality: str = "neutral", llm: str = "openai"):
         return {"error": "Missing LIVEKIT_API_KEY or LIVEKIT_API_SECRET"}
 
     # 3. Create metadata JSON
-    metadata = json.dumps({"personality": personality, "llm": llm})
+    metadata = json.dumps({"personality": personality, "llm": llm, "stt": stt})
 
     # 4. Create the JWT Token with permissions to join ONLY this specific room
     token = AccessToken(

@@ -9,10 +9,11 @@ from livekit.agents import (
     llm,
 )
 from livekit.agents import inference
-from livekit.plugins import cartesia, deepgram, groq
-from config import MAX_CONTEXT_ITEMS, ACTIVE_LLM, ACTIVE_PERSONALITY
+from livekit.plugins import cartesia, groq
+from config import MAX_CONTEXT_ITEMS, ACTIVE_LLM, ACTIVE_PERSONALITY, ACTIVE_STT
 
 from utils.prompts import get_personality
+from utils.stt_factory import create_stt_engine, resolve_stt_provider
 from utils.tools import AssistantTools
 from utils.interruption import (
     AEC_WARMUP_DURATION,
@@ -55,6 +56,7 @@ async def entrypoint(ctx: JobContext):
 
     personality_name = metadata.get("personality", ACTIVE_PERSONALITY)
     llm_choice = metadata.get("llm", ACTIVE_LLM)
+    stt_choice = resolve_stt_provider(metadata.get("stt", ACTIVE_STT))
 
     system_prompt, greeting = get_personality(personality_name)
 
@@ -65,10 +67,10 @@ async def entrypoint(ctx: JobContext):
     else:
         llm_engine = inference.LLM(model="openai/gpt-4o")
 
-    stt_engine = deepgram.STT(language="hi")
+    stt_engine = create_stt_engine(stt_choice)
     tts_engine = cartesia.TTS(
         model="sonic-3-latest",
-        language="hi",
+        language="hi",  
         voice="95d51f79-c397-46f9-b49a-23763d3eaa2d",
         sample_rate=24000,
     )

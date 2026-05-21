@@ -22,20 +22,22 @@ function App() {
   const [error, setError] = useState(null);
   const [personality, setPersonality] = useState("neutral");
   const [llm, setLlm] = useState("openai");
+  const [stt, setStt] = useState("deepgram");
 
   const connect = async () => {
     try {
       setIsConnecting(true);
       setError(null);
       // Fetch the token from our FastAPI backend with user preferences
-      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/getToken?personality=${personality}&llm=${llm}`);
+      const params = new URLSearchParams({ personality, llm, stt });
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/getToken?${params}`);
       const data = await response.json();
 
       if (data.error) {
         throw new Error(data.error);
       }
 
-      setConnectionDetails(data);
+      setConnectionDetails({ ...data, sttProvider: stt });
     } catch (err) {
       console.error(err);
       setError(err.message || "Failed to fetch token from backend.");
@@ -75,7 +77,7 @@ function App() {
             onDisconnected={disconnect}
             className="flex-1 flex flex-col w-full relative"
           >
-            <VoiceAssistantUI />
+            <VoiceAssistantUI sttProvider={connectionDetails.sttProvider} />
             <RoomAudioRenderer />
           </LiveKitRoom>
         ) : (
@@ -85,7 +87,7 @@ function App() {
               Configure your agent and click connect to spawn an isolated instance.
             </p>
 
-            <div className="flex gap-4 mb-8">
+            <div className="flex flex-wrap justify-center gap-4 mb-8">
               <div className="flex flex-col gap-2">
                 <label className="text-sm font-medium text-neutral-600">Personality</label>
                 <select
@@ -108,6 +110,18 @@ function App() {
                 >
                   <option value="openai">OpenAI (GPT-4o)</option>
                   <option value="groq">Groq (openai/gpt-oss-120b)</option>
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-neutral-600">STT Provider</label>
+                <select
+                  value={stt}
+                  onChange={(e) => setStt(e.target.value)}
+                  className="px-4 py-2 bg-white border border-neutral-200 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                >
+                  <option value="deepgram">Deepgram (hi)</option>
+                  <option value="sarvam">Sarvam (Hinglish)</option>
                 </select>
               </div>
             </div>
@@ -139,7 +153,8 @@ function App() {
 
 // ─── Inner UI that requires LiveKit context ───
 
-function VoiceAssistantUI() {
+function VoiceAssistantUI({ sttProvider = "deepgram" }) {
+  const sttLabel = sttProvider === "sarvam" ? "Sarvam" : "Deepgram";
   const { state, audioTrack } = useVoiceAssistant();
   const connectionState = useConnectionState();
   const { localParticipant } = useLocalParticipant();
@@ -194,7 +209,7 @@ function VoiceAssistantUI() {
             </div>
             <div className="flex items-center gap-2 bg-white/50 backdrop-blur-md border border-neutral-200 px-3 py-1.5 rounded-full text-xs font-medium text-neutral-600 shadow-sm">
               <span className="w-2 h-2 rounded-full bg-blue-500" />
-              <span>STT (Deepgram): {metrics.stt > 0 ? `${metrics.stt}ms` : "-"}</span>
+              <span>STT ({sttLabel}): {metrics.stt > 0 ? `${metrics.stt}ms` : "-"}</span>
             </div>
             <div className="flex items-center gap-2 bg-white/50 backdrop-blur-md border border-neutral-200 px-3 py-1.5 rounded-full text-xs font-medium text-neutral-600 shadow-sm">
               <span className="w-2 h-2 rounded-full bg-purple-500" />
