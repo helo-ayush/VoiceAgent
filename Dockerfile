@@ -3,9 +3,10 @@ FROM python:3.11-slim
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies needed by LiveKit
+# Build deps for onnx/torch wheels used by Silero VAD and plugins
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
+    g++ \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for Docker layer caching
@@ -18,9 +19,8 @@ COPY server.py .
 COPY config.py .
 COPY utils/ ./utils/
 
-# Pre-download model files (Silero VAD, Turn Detector, etc.) 
-# so they are baked into the image and don't fail at runtime.
-RUN python agent.py download-files
+# Pre-download plugin model files (Silero VAD, etc.) without loading agent.py
+RUN python -m livekit.agents download-files
 
 # Hugging Face Spaces exposes port 7860 by default
 ENV PORT=7860
