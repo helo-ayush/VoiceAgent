@@ -107,7 +107,7 @@ function App() {
                   className="px-4 py-2 bg-white border border-neutral-200 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-neutral-900"
                 >
                   <option value="openai">OpenAI (GPT-4o)</option>
-                  <option value="groq">Groq (GPT-OSS 120B)</option>
+                  <option value="groq">Groq (openai/gpt-oss-120b)</option>
                 </select>
               </div>
             </div>
@@ -194,15 +194,15 @@ function VoiceAssistantUI() {
             </div>
             <div className="flex items-center gap-2 bg-white/50 backdrop-blur-md border border-neutral-200 px-3 py-1.5 rounded-full text-xs font-medium text-neutral-600 shadow-sm">
               <span className="w-2 h-2 rounded-full bg-blue-500" />
-              <span>STT (Deepgram): {metrics.stt > 0 ? `${metrics.stt}ms` : "waiting..."}</span>
+              <span>STT (Deepgram): {metrics.stt > 0 ? `${metrics.stt}ms` : "-"}</span>
             </div>
             <div className="flex items-center gap-2 bg-white/50 backdrop-blur-md border border-neutral-200 px-3 py-1.5 rounded-full text-xs font-medium text-neutral-600 shadow-sm">
               <span className="w-2 h-2 rounded-full bg-purple-500" />
-              <span>LLM (TTFT): {metrics.llm > 0 ? `${metrics.llm}ms` : "waiting..."}</span>
+              <span>LLM (TTFT): {metrics.llm > 0 ? `${metrics.llm}ms` : "-"}</span>
             </div>
             <div className="flex items-center gap-2 bg-white/50 backdrop-blur-md border border-neutral-200 px-3 py-1.5 rounded-full text-xs font-medium text-neutral-600 shadow-sm">
               <span className="w-2 h-2 rounded-full bg-orange-500" />
-              <span>TTS (TTFB): {metrics.tts > 0 ? `${metrics.tts}ms` : "waiting..."}</span>
+              <span>TTS (TTFB): {metrics.tts > 0 ? `${metrics.tts}ms` : "-"}</span>
             </div>
           </>
         )}
