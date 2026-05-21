@@ -1,31 +1,26 @@
-import logging
-from typing import TYPE_CHECKING
-
 from dotenv import load_dotenv
 load_dotenv()
 from livekit.agents import (
     Agent,
     AgentSession,
     JobContext,
-    RoomInputOptions,
     WorkerOptions,
     cli,
     llm,
 )
-from livekit.agents.voice import agent_activity as _agent_activity_module
-from livekit.agents.voice import agent_session as _agent_session_module
-from livekit.agents.voice.agent_activity import AgentActivity
-
-from livekit.plugins import noise_cancellation, silero
 from livekit.agents import inference
 from livekit.plugins import cartesia, deepgram, groq
 from config import MAX_CONTEXT_ITEMS, ACTIVE_LLM, ACTIVE_PERSONALITY
 
-if TYPE_CHECKING:
-    from livekit.agents import vad
-
 from utils.prompts import get_personality
 from utils.tools import AssistantTools
+from utils.interruption import (
+    AEC_WARMUP_DURATION,
+    INTERRUPTION_TURN_HANDLING,
+    get_barge_in_room_input_options,
+    load_barge_in_vad,
+    register_barge_in_handlers,
+)
 import json
 
 
@@ -43,33 +38,6 @@ class Assistant(Agent):
         self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage
     ) -> None:
         turn_ctx.truncate(max_items=MAX_CONTEXT_ITEMS)
-
-
-class InterruptibleAgentActivity(AgentActivity):
-    """Prevent the SDK from turning off VAD-based barge-in when TTS starts."""
-
-    def _disable_vad_interruption_soon(self) -> None:
-        pass
-
-
-# Ensure AgentSession instantiates our activity class.
-_agent_activity_module.AgentActivity = InterruptibleAgentActivity
-_agent_session_module.AgentActivity = InterruptibleAgentActivity
-
-
-def _try_barge_in(session: AgentSession) -> None:
-    """Force-stop agent speech when the user starts talking over the agent."""
-    if session.agent_state != "speaking" or session._activity is None:
-        return
-    activity = session._activity
-    current = activity._current_speech
-    if current is not None and current.interrupted:
-        return
-    activity._interruption_by_audio_activity_enabled = True
-    try:
-        activity.interrupt(force=True)
-    except Exception as e:
-        logging.warning("barge-in interrupt failed: %s", e)
 
 
 async def entrypoint(ctx: JobContext):
@@ -105,48 +73,13 @@ async def entrypoint(ctx: JobContext):
         stt=stt_engine,
         llm=llm_engine,
         tts=tts_engine,
-        vad=silero.VAD.load(
-            min_silence_duration=0.3,
-            min_speech_duration=0.05,
-            activation_threshold=0.35,
-        ),
-        aec_warmup_duration=0,
-        turn_handling={
-            "interruption": {
-                # VAD-only barge-in — adaptive needs LiveKit inference and can block VAD.
-                "mode": "vad",
-                "enabled": True,
-                "min_duration": 0.05,
-                "min_words": 0,
-                "discard_audio_if_uninterruptible": False,
-                "backchannel_boundary": None,
-                "resume_false_interruption": False,
-            },
-            "endpointing": {
-                "min_delay": 0.3,
-            },
-            "preemptive_generation": {
-                "enabled": True,
-                "preemptive_tts": True,
-            },
-        },
+        vad=load_barge_in_vad(),
+        aec_warmup_duration=AEC_WARMUP_DURATION,
+        turn_handling=INTERRUPTION_TURN_HANDLING,
         tools=llm.find_function_tools(fnc_ctx),
     )
 
-    @session.on("user_state_changed")
-    def _on_user_state_changed(ev) -> None:
-        if ev.new_state == "speaking":
-            _try_barge_in(session)
-
-    @session.on("user_input_transcribed")
-    def _on_user_transcript(ev) -> None:
-        if not ev.is_final and ev.transcript.strip():
-            _try_barge_in(session)
-
-    @session.on("agent_state_changed")
-    def _on_agent_state_changed(ev) -> None:
-        if ev.new_state == "speaking" and session._activity is not None:
-            session._activity._interruption_by_audio_activity_enabled = True
+    register_barge_in_handlers(session)
 
     import asyncio
 
@@ -175,11 +108,7 @@ async def entrypoint(ctx: JobContext):
     await session.start(
         agent=Assistant(system_prompt=system_prompt, greeting_instructions=greeting),
         room=ctx.room,
-        room_input_options=RoomInputOptions(
-            # NC instead of BVC — BVC can suppress the user's voice during agent speech,
-            # which makes barge-in appear completely broken.
-            noise_cancellation=noise_cancellation.NC(),
-        ),
+        room_input_options=get_barge_in_room_input_options(),
     )
 
 
