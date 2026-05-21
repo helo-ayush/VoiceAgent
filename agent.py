@@ -32,7 +32,11 @@ class Assistant(Agent):
         self.greeting_instructions = greeting_instructions
 
     async def on_enter(self) -> None:
-        self.session.say(self.greeting_instructions, allow_interruptions=True)
+        # generate_reply runs the LLM; say() would read the instruction text aloud.
+        self.session.generate_reply(
+            instructions=self.greeting_instructions,
+            allow_interruptions=True,
+        )
 
     async def on_user_turn_completed(
         self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage
