@@ -1,3 +1,13 @@
+/**
+ * Voice Assistant React Frontend Application.
+ * 
+ * Provides a clean visual interface for the LiveKit Voice Agent.
+ * Handles user preference selection (personality, LLM, STT), makes authorization
+ * handshakes with the FastAPI token server, connects to LiveKit Cloud WebRTC rooms,
+ * tracks latency metrics, registers client-side noise suppression filters, and
+ * renders a custom real-time HTML5 Canvas dual waveform visualizer.
+ */
+
 import { useState, useEffect, useRef } from "react";
 import { Mic, Square } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -17,19 +27,28 @@ import { KrispNoiseFilter } from "@livekit/krisp-noise-filter";
 import "@livekit/components-styles";
 
 function App() {
+  // State variables for tracking the WebRTC tokens and connection status
   const [connectionDetails, setConnectionDetails] = useState(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState(null);
+  
+  // Dynamic agent configurations populated by drop-down menus
   const [personality, setPersonality] = useState("neutral");
   const [llm, setLlm] = useState("openai");
   const [stt, setStt] = useState("deepgram");
 
+  /**
+   * Action Handler: Fetches access tokens and boots the room session.
+   */
   const connect = async () => {
     try {
       setIsConnecting(true);
       setError(null);
-      // Fetch the token from our FastAPI backend with user preferences
+      
+      // Serialize selection state into REST query parameters
       const params = new URLSearchParams({ personality, llm, stt });
+      
+      // Request signed JWT from our FastAPI server
       const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/getToken?${params}`);
       const data = await response.json();
 
@@ -37,6 +56,7 @@ function App() {
         throw new Error(data.error);
       }
 
+      // Store server token parameters and trigger LiveKitRoom component mount
       setConnectionDetails({ ...data, sttProvider: stt });
     } catch (err) {
       console.error(err);
@@ -46,6 +66,9 @@ function App() {
     }
   };
 
+  /**
+   * Cleans the active connection state to unmount the LiveKitRoom and close WebRTC sockets.
+   */
   const disconnect = () => {
     setConnectionDetails(null);
   };
@@ -63,24 +86,31 @@ function App() {
           </div>
         )}
 
-        {/* LiveKit Room Connection */}
+        {/* 
+          LiveKit Room Container.
+          Handles standard audio pre-processing and initiates WebRTC peer connections.
+        */}
         {connectionDetails ? (
           <LiveKitRoom
             serverUrl={connectionDetails.serverUrl}
             token={connectionDetails.token}
             connect={true}
             audio={{
-              echoCancellation: true,
-              noiseSuppression: true,
-              autoGainControl: true,
+              echoCancellation: true,    // Browser AEC
+              noiseSuppression: true,    // Browser standard NC
+              autoGainControl: true,     // Normalizes microphone gain levels
             }}
             onDisconnected={disconnect}
             className="flex-1 flex flex-col w-full relative"
           >
+            {/* Renders the inner voice call UI panels */}
             <VoiceAssistantUI sttProvider={connectionDetails.sttProvider} />
+            
+            {/* Standard audio tag renderer required to play incoming WebRTC voice streams */}
             <RoomAudioRenderer />
           </LiveKitRoom>
         ) : (
+          /* Connect Landing Screen with Configuration Controls */
           <div className="flex-1 flex flex-col items-center justify-center">
             <h1 className="text-2xl font-semibold mb-6">Voice Assistant</h1>
             <p className="text-neutral-500 mb-8 text-center max-w-md">
@@ -88,6 +118,7 @@ function App() {
             </p>
 
             <div className="flex flex-wrap justify-center gap-4 mb-8">
+              {/* Personality Dropdown */}
               <div className="flex flex-col gap-2">
                 <label className="text-sm font-medium text-neutral-600">Personality</label>
                 <select
@@ -101,6 +132,7 @@ function App() {
                 </select>
               </div>
 
+              {/* LLM Engine Dropdown */}
               <div className="flex flex-col gap-2">
                 <label className="text-sm font-medium text-neutral-600">LLM Provider</label>
                 <select
@@ -113,6 +145,7 @@ function App() {
                 </select>
               </div>
 
+              {/* Speech-To-Text Dropdown */}
               <div className="flex flex-col gap-2">
                 <label className="text-sm font-medium text-neutral-600">STT Provider</label>
                 <select
@@ -130,7 +163,7 @@ function App() {
 
       </main>
 
-      {/* Bottom Floating App Controls */}
+      {/* Bottom Floating Control Panel (Connect / Disconnect Button) */}
       <footer className="fixed bottom-0 left-0 w-full pb-8 flex justify-center items-center z-50 bg-gradient-to-t from-[#FDFCF8] to-transparent pt-10">
         <div className="relative flex items-center justify-center">
           <button
@@ -151,43 +184,49 @@ function App() {
   );
 }
 
-// ─── Inner UI that requires LiveKit context ───
+// ─── Inner UI Components (Executed inside LiveKit Room Context) ───
 
 function VoiceAssistantUI({ sttProvider = "deepgram" }) {
   const sttLabel = sttProvider === "sarvam" ? "Sarvam" : "Deepgram";
+  
+  // Access connection, speech, and state hooks from LiveKit React SDK
   const { state, audioTrack } = useVoiceAssistant();
   const connectionState = useConnectionState();
   const { localParticipant } = useLocalParticipant();
 
-  // Track Detailed Conversational Latency
+  // State to hold and print live pipeline execution latencies (broadcast from the agent worker)
   const [metrics, setMetrics] = useState({ stt: 0, llm: 0, tts: 0 });
 
+  // WebRTC custom data channel listener. Reads system updates dynamically.
   useDataChannel((msg) => {
     if (msg.topic === "agent_metrics") {
       console.log("RECEIVED METRICS MSG:", msg);
       try {
         const data = JSON.parse(new TextDecoder().decode(msg.payload));
+        // Parse and populate latest latencies into local state variables
         setMetrics((prev) => ({ ...prev, [data.type]: data.latency }));
       } catch (e) {
-        console.error("Failed to parse agent metrics", e);
+        console.error("Failed to parse agent metrics packet", e);
       }
     }
   });
 
-  // Ensure we actively track the microphone publication
+  // Fetch local microphone track references
   const localTracks = useTracks([Track.Source.Microphone]);
   const localMicTrack = localTracks.find((t) => t.participant.isLocal);
 
-  // Apply Krisp noise filter to the local microphone once it's available
+  // Client-Side Noise Cancellation:
+  // Dynamically load and inject the advanced Krisp Noise Filter processor onto the mic stream.
   useEffect(() => {
     if (localMicTrack?.publication?.track) {
       const krisp = KrispNoiseFilter();
       localMicTrack.publication.track.setProcessor(krisp).catch((e) => {
-        console.warn("Krisp noise filter could not be applied:", e);
+        console.warn("Krisp noise filter could not be loaded on client browser:", e);
       });
     }
   }, [localMicTrack]);
 
+  // Helper method to convert state flags into readable status tags
   const getStatusText = () => {
     if (connectionState === "connecting") return "Connecting...";
     if (state === "listening") return "Listening...";
@@ -199,7 +238,7 @@ function VoiceAssistantUI({ sttProvider = "deepgram" }) {
   return (
     <div className="flex-1 flex flex-col justify-end items-center w-full relative pb-10">
 
-      {/* Network & Status Details */}
+      {/* Network Connectivity & Latency Metrics Dashboard */}
       <div className="absolute top-0 left-0 flex flex-col gap-3">
         {connectionState === "connected" && (
           <>
@@ -207,14 +246,20 @@ function VoiceAssistantUI({ sttProvider = "deepgram" }) {
               <ConnectionQualityIndicator participant={localParticipant} />
               <span>LiveKit Network</span>
             </div>
+            
+            {/* Speech-To-Text Metric Card */}
             <div className="flex items-center gap-2 bg-white/50 backdrop-blur-md border border-neutral-200 px-3 py-1.5 rounded-full text-xs font-medium text-neutral-600 shadow-sm">
               <span className="w-2 h-2 rounded-full bg-blue-500" />
               <span>STT ({sttLabel}): {metrics.stt > 0 ? `${metrics.stt}ms` : "-"}</span>
             </div>
+            
+            {/* LLM Generation TTFT Metric Card */}
             <div className="flex items-center gap-2 bg-white/50 backdrop-blur-md border border-neutral-200 px-3 py-1.5 rounded-full text-xs font-medium text-neutral-600 shadow-sm">
               <span className="w-2 h-2 rounded-full bg-purple-500" />
               <span>LLM (TTFT): {metrics.llm > 0 ? `${metrics.llm}ms` : "-"}</span>
             </div>
+            
+            {/* Text-To-Speech Synthesis TTFB Metric Card */}
             <div className="flex items-center gap-2 bg-white/50 backdrop-blur-md border border-neutral-200 px-3 py-1.5 rounded-full text-xs font-medium text-neutral-600 shadow-sm">
               <span className="w-2 h-2 rounded-full bg-orange-500" />
               <span>TTS (TTFB): {metrics.tts > 0 ? `${metrics.tts}ms` : "-"}</span>
@@ -223,7 +268,7 @@ function VoiceAssistantUI({ sttProvider = "deepgram" }) {
         )}
       </div>
 
-      {/* Visualizer & Status text (Pushed to bottom) */}
+      {/* Waveform Visualizer Wrapper */}
       <div className="w-full flex flex-col items-center justify-center opacity-80 relative">
         <div className="flex items-center justify-center gap-2 text-xs font-semibold text-neutral-400 tracking-widest uppercase mb-2 z-10">
           {connectionState === "connected" && (
@@ -232,10 +277,10 @@ function VoiceAssistantUI({ sttProvider = "deepgram" }) {
           {getStatusText()}
         </div>
 
-        {/* Dual Overlapping Visualizers */}
+        {/* Dual Overlapping HTML5 Canvas Waveforms */}
         <div className="h-24 w-full max-w-sm flex items-center justify-center relative">
 
-          {/* User's Microphone Visualizer (Gray) - using local bypass */}
+          {/* User microphone visualizer (gray glow) */}
           <div className="absolute inset-0 flex items-center justify-center opacity-50">
             <CanvasVisualizer
               trackRef="local"
@@ -243,7 +288,7 @@ function VoiceAssistantUI({ sttProvider = "deepgram" }) {
             />
           </div>
 
-          {/* AI's Voice Visualizer (Blue) */}
+          {/* Agent incoming voice visualizer (blue glow) */}
           <div className="absolute inset-0 flex items-center justify-center mix-blend-multiply">
             <CanvasVisualizer
               trackRef={audioTrack}
@@ -257,7 +302,7 @@ function VoiceAssistantUI({ sttProvider = "deepgram" }) {
   );
 }
 
-// ─── Custom Canvas Waveform Visualizer (Restoring Original Design) ───
+// ─── Custom HTML5 Canvas Waveform Visualizer (PCM Domain Analyzer) ───
 
 function CanvasVisualizer({ trackRef, color }) {
   const canvasRef = useRef(null);
@@ -271,17 +316,20 @@ function CanvasVisualizer({ trackRef, color }) {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
 
-    // Attempt to extract the raw MediaStreamTrack
     let mediaStreamTrack = null;
     let localStream = null;
 
+    /**
+     * Extracts browser WebRTC media stream tracks and initializes the Web Audio API context.
+     */
     const setupAudio = async () => {
+      // 1. Fetch raw audio streams
       if (trackRef === "local") {
         try {
           localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
           mediaStreamTrack = localStream.getAudioTracks()[0];
         } catch (e) {
-          console.error("Mic access denied for visualizer", e);
+          console.error("Mic access denied for custom canvas visualizer:", e);
         }
       } else if (trackRef?.publication?.track?.mediaStreamTrack) {
         mediaStreamTrack = trackRef.publication.track.mediaStreamTrack;
@@ -289,8 +337,8 @@ function CanvasVisualizer({ trackRef, color }) {
         mediaStreamTrack = trackRef.track.mediaStreamTrack;
       }
 
+      // If no track is present yet, render a silent resting horizontal line
       if (!mediaStreamTrack) {
-        // Draw a flat resting line if track is not active yet
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.lineWidth = 2;
         ctx.strokeStyle = color;
@@ -302,7 +350,7 @@ function CanvasVisualizer({ trackRef, color }) {
         return;
       }
 
-      // Create a new AudioContext specifically for analyzing this track
+      // 2. Instantiate and wire Web Audio API pipeline components
       const audioContext = new (window.AudioContext || window.webkitAudioContext)();
       audioContextRef.current = audioContext;
 
@@ -310,14 +358,20 @@ function CanvasVisualizer({ trackRef, color }) {
       const source = audioContext.createMediaStreamSource(mediaStream);
       sourceRef.current = source;
 
+      // Instantiate Web Audio Analyser Node
       const analyser = audioContext.createAnalyser();
-      analyser.fftSize = 512;
+      analyser.fftSize = 512;          // Sets the sizing of Fast Fourier Transform bins
       analyserRef.current = analyser;
 
       source.connect(analyser);
 
+      // Raw array to hold real-time PCM Byte Time Domain amplitude values
       const dataArray = new Uint8Array(analyser.frequencyBinCount);
 
+      /**
+       * Loop method synced with browser refresh cycles (requestAnimationFrame).
+       * Renders the wavy oscilliscope path in real-time.
+       */
       const drawWaveform = () => {
         if (!canvasRef.current || !analyserRef.current) return;
         const canvas = canvasRef.current;
@@ -325,6 +379,7 @@ function CanvasVisualizer({ trackRef, color }) {
         const width = canvas.width;
         const height = canvas.height;
 
+        // Fetch latest time domain amplitudes (values range from 0 to 255, silent at 128)
         analyserRef.current.getByteTimeDomainData(dataArray);
 
         ctx.clearRect(0, 0, width, height);
@@ -335,17 +390,22 @@ function CanvasVisualizer({ trackRef, color }) {
         const sliceWidth = width / dataArray.length;
         let x = 0;
         let sum = 0;
+        
+        // Loop over the PCM array to plot coordinates
         for (let i = 0; i < dataArray.length; i++) {
-          const v = dataArray[i] / 128.0;
-          const y = (v * height) / 2;
+          const v = dataArray[i] / 128.0;      // Normalize amplitudes (around 1.0)
+          const y = (v * height) / 2;          // Project coordinate along canvas heights
+          
           if (i === 0) ctx.moveTo(x, y);
           else ctx.lineTo(x, y);
+          
           x += sliceWidth;
-          sum += Math.abs(128 - dataArray[i]);
+          sum += Math.abs(128 - dataArray[i]); // Sum off-center offsets to track loudness
         }
+        
         ctx.lineTo(width, height / 2);
 
-        // Add subtle glow when loud enough
+        // Add subtle neon glow effect when loudness exceeds threshold
         if (sum > 500) {
           ctx.shadowBlur = 4;
           ctx.shadowColor = color;
@@ -355,6 +415,7 @@ function CanvasVisualizer({ trackRef, color }) {
 
         ctx.stroke();
 
+        // Recursively trigger next frame draw
         animationFrameRef.current = requestAnimationFrame(drawWaveform);
       };
 
@@ -363,6 +424,7 @@ function CanvasVisualizer({ trackRef, color }) {
 
     setupAudio();
 
+    // Clean up Web Audio resources on unmount
     return () => {
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
       if (sourceRef.current) sourceRef.current.disconnect();
@@ -383,4 +445,4 @@ function CanvasVisualizer({ trackRef, color }) {
   );
 }
 
-export default App;
+export default App;
