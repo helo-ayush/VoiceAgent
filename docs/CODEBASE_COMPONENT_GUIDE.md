@@ -28,7 +28,7 @@ Handles dynamic and fallback configuration keys. Enables switching between multi
 
 ### Component Logic & Examples
 * **Active Personalities**: Dictates the primary prompt instruction loaded from `utils/prompts.py` (`"neutral" | "savage" | "genz"`).
-* **Vendor Selection**: Allows developers to switch STT engines (`"deepgram"` or `"sarvam"`) and LLM instances (`"openai"` or `"groq"`) instantly.
+* **Vendor Selection**: Allows developers to switch STT engines (`"deepgram"`, `"sarvam"`, `"groq-whisper-v3"`, or `"groq-whisper-turbo"`) and LLM instances (`"openai"` or `"groq"`) instantly.
 * **Context Trimming Limits**: Configures `MAX_CONTEXT_ITEMS = 20`. This ensures that only the last 20 messages are maintained in the chat history, automatically dropping earlier cycles to optimize both API latency and billing costs.
 
 ---

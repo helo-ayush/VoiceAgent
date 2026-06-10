@@ -14,7 +14,7 @@ To initiate a call, the client frontend MUST perform a handshake with the token 
 * **Query Parameters**:
   - `personality` (string, optional): `"neutral" | "savage" | "genz"` (default: `"neutral"`)
   - `llm` (string, optional): `"openai" | "groq"` (default: `"openai"`)
-  - `stt` (string, optional): `"deepgram" | "sarvam"` (default: `"deepgram"`)
+  - `stt` (string, optional): `"deepgram" | "sarvam" | "groq-whisper-v3" | "groq-whisper-turbo"` (default: `"deepgram"`)
 
 ### Response Payload Structure
 ```json

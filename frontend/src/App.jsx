@@ -155,6 +155,8 @@ function App() {
                 >
                   <option value="deepgram">Deepgram (hi)</option>
                   <option value="sarvam">Sarvam (Hinglish)</option>
+                  <option value="groq-whisper-v3">Groq Whisper V3</option>
+                  <option value="groq-whisper-turbo">Groq Whisper Turbo</option>
                 </select>
               </div>
             </div>
@@ -187,7 +189,13 @@ function App() {
 // ─── Inner UI Components (Executed inside LiveKit Room Context) ───
 
 function VoiceAssistantUI({ sttProvider = "deepgram" }) {
-  const sttLabel = sttProvider === "sarvam" ? "Sarvam" : "Deepgram";
+  const getSttLabel = (provider) => {
+    if (provider === "sarvam") return "Sarvam";
+    if (provider === "groq-whisper-v3") return "Groq V3";
+    if (provider === "groq-whisper-turbo") return "Groq Turbo";
+    return "Deepgram";
+  };
+  const sttLabel = getSttLabel(sttProvider);
   
   // Access connection, speech, and state hooks from LiveKit React SDK
   const { state, audioTrack } = useVoiceAssistant();

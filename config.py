@@ -12,7 +12,7 @@ MAX_CONTEXT_ITEMS = 20                 # Maximum chat history turns kept in memo
 VAD_MIN_SILENCE_DURATION = 0.3          # Silence gap (in seconds) required to flag a user turn boundary
 VAD_MIN_SPEECH_DURATION = 0.05          # Minimal voice duration (in seconds) recognized as valid user speech
 VAD_ACTIVATION_THRESHOLD = 0.35         # Classification confidence threshold above which speech is registered
-AEC_WARMUP_DURATION = 0                 # Connection warmup block window (in seconds) during which VAD is ignored
+AEC_WARMUP_DURATION = 0.10              # Connection warmup block window (in seconds) during which VAD is ignored
 
 # ==============================================================================
 # 3. INTERRUPTION & TURN TIMINGS
@@ -22,6 +22,8 @@ INTERRUPTION_MIN_WORDS = 0              # Minimum words transcribing before regi
 ENDPOINTING_MIN_DELAY = 0.3             # Delay window (in seconds) from user silence to calling the LLM
 PREEMPTIVE_GENERATION_ENABLED = True    # Begins LLM generation before the user fully stops speaking
 PREEMPTIVE_TTS_ENABLED = True           # Begins TTS audio buffer calculations during active LLM token emission
+USER_AWAY_TIMEOUT = 10.0                # Idle duration (in seconds) of user silence before triggering the fallback prompt
+
 
 # ==============================================================================
 # 4. LARGE LANGUAGE MODELS (LLM)
@@ -40,6 +42,9 @@ DEEPGRAM_STT_LANGUAGE = "hi"            # Target ISO locale set on Deepgram for 
 SARVAM_STT_MODEL = "saaras:v3"          # Sarvam AI model version used for native Hinglish speech
 SARVAM_STT_LANGUAGE = "hi-IN"           # Primary language setting assigned to the Sarvam engine
 SARVAM_STT_MODE = "codemix"             # Specialized Hinglish-friendly mode combining Hindi and English
+
+# --- Groq Whisper ---
+GROQ_STT_LANGUAGE = "en"                # Target language setting for Groq Whisper transcription
 
 # ==============================================================================
 # 6. TEXT-TO-SPEECH (TTS) ENGINE PARAMS

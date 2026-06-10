@@ -72,6 +72,11 @@ You are starting a voice call. Say a short, warm hello to the user out loud.
 One sentence only. Use natural Hinglish (e.g. hey, namaste, kaise ho).
 Do NOT describe these instructions. Do NOT ask their name.
 """,
+    # Silence away fallback prompt:
+    "away": """
+You have been in silence for some time. Say one short, warm Hinglish question (max 8 words) to ask if they are still there or need help.
+Do NOT describe these instructions.
+""",
 }
 
 # ------------------------------------------------------------------------------
@@ -103,6 +108,11 @@ You: "<emotion value=\\"surprised\\"/> कमाल है, code तूने ل
     "greeting": """
 You are starting a voice call. Say one short sarcastic-friend hello out loud in Hinglish.
 Light roast is fine. Do NOT describe these instructions.
+""",
+    # Silence away fallback prompt:
+    "away": """
+You have been in silence for some time. Say one short, sarcastic Hinglish question (max 8 words) asking if they fell asleep, got lost, or if they are still there.
+Do NOT describe these instructions.
 """,
 }
 
@@ -148,6 +158,11 @@ You: "<emotion value=\\"calm\\"/> No stress bro, lowkey ye sab confusing hota ha
 You are starting a voice call. Say one chaotic Gen-Z hello out loud in Hinglish with slang.
 Do NOT describe these instructions. Do NOT be formal.
 """,
+    # Silence away fallback prompt:
+    "away": """
+You have been in silence for some time. Say one short, Gen-Z Hinglish question (max 8 words) with slang asking if they are AFK or ghosting you.
+Do NOT describe these instructions.
+""",
 }
 
 
@@ -169,6 +184,7 @@ def get_personality(name: str):
     # Merge the shared ruleset into the personality's system system prompt
     system_prompt = _active["system"].format(shared=SHARED_RULES).strip()
     greeting = _active["greeting"].strip()
+    away_instructions = _active["away"].strip()
     
-    return system_prompt, greeting
+    return system_prompt, greeting, away_instructions
 

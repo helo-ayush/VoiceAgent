@@ -16,6 +16,8 @@ load_dotenv()
 
 import json
 import asyncio
+import logging
+
 from livekit.agents import (
     Agent,
     AgentSession,
@@ -38,11 +40,16 @@ from config import (
     SARVAM_STT_MODEL,
     SARVAM_STT_LANGUAGE,
     SARVAM_STT_MODE,
+    GROQ_STT_LANGUAGE,
     TTS_MODEL,
     TTS_LANGUAGE,
     TTS_VOICE_ID,
     TTS_SAMPLE_RATE,
+    USER_AWAY_TIMEOUT,
 )
+
+logger = logging.getLogger("voice_agent")
+
 
 # Import internal modular utilities
 from utils.prompts import get_personality
@@ -118,10 +125,10 @@ async def entrypoint(ctx: JobContext):
     
     # Resolve the requested Speech-to-Text provider with a safe fallback
     requested_stt = metadata.get("stt", ACTIVE_STT)
-    stt_choice = requested_stt if requested_stt in {"deepgram", "sarvam"} else "deepgram"
+    stt_choice = requested_stt if requested_stt in {"deepgram", "sarvam", "groq-whisper-v3", "groq-whisper-turbo"} else "deepgram"
 
-    # 4. Load the active system prompt and greeting text based on the chosen personality profile
-    system_prompt, greeting = get_personality(personality_name)
+    # 4. Load the active system prompt, greeting text, and away prompt based on the chosen personality profile
+    system_prompt, greeting, away_instructions = get_personality(personality_name)
 
 
     # 5. Initialize the Custom Tools container for LLM function calling
@@ -135,12 +142,22 @@ async def entrypoint(ctx: JobContext):
         # Default to standard OpenAI engine via LiveKit's optimized wrapper
         llm_engine = inference.LLM(model=OPENAI_LLM_MODEL)
 
-    # 7. Dynamically instantiate the requested Speech-to-Text transcriber (Deepgram or Sarvam)
+    # 7. Dynamically instantiate the requested Speech-to-Text transcriber (Deepgram, Sarvam, or Groq)
     if stt_choice == "sarvam":
         stt_engine = sarvam.STT(
             language=SARVAM_STT_LANGUAGE,
             model=SARVAM_STT_MODEL,
             mode=SARVAM_STT_MODE,
+        )
+    elif stt_choice == "groq-whisper-v3":
+        stt_engine = groq.STT(
+            model="whisper-large-v3",
+            language=GROQ_STT_LANGUAGE,
+        )
+    elif stt_choice == "groq-whisper-turbo":
+        stt_engine = groq.STT(
+            model="whisper-large-v3-turbo",
+            language=GROQ_STT_LANGUAGE,
         )
     else:
         stt_engine = deepgram.STT(
@@ -168,10 +185,24 @@ async def entrypoint(ctx: JobContext):
         aec_warmup_duration=AEC_WARMUP_DURATION,                 # Patch to 0ms for instant initial barge-in
         turn_handling=INTERRUPTION_TURN_HANDLING,                # Inject custom barge-in VAD options
         tools=llm.find_function_tools(fnc_ctx),                  # Register @llm.function_tool decorated methods
+        user_away_timeout=USER_AWAY_TIMEOUT,                     # Idle duration before marking user as away
     )
 
     # 10. Wire custom event handlers for user interruptions (stopping speech immediately on user overlap)
     register_barge_in_handlers(session)
+
+    # 10b. Setup fallback logic for when the user is silent/away for too long
+    @session.on("user_state_changed")
+    def on_user_state_changed(event):
+        if event.new_state == "away":
+            logger.info("User away timeout reached. Resetting user state and prompting user in Hinglish.")
+            # Transition user state back to listening so that the away timer can trigger again if silent
+            session._update_user_state("listening")
+            session.generate_reply(
+                instructions=away_instructions,
+                allow_interruptions=True,
+            )
+
 
     # 11. Conversational Performance Metrics Tracker
     #     Subscribes to pipeline metrics (STT delay, LLM TTFT, TTS TTFB) and broadcasts
