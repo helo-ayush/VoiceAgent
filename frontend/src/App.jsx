@@ -291,7 +291,7 @@ function VoiceAssistantUI({ sttProvider = "deepgram" }) {
           {/* User microphone visualizer (gray glow) */}
           <div className="absolute inset-0 flex items-center justify-center opacity-50">
             <CanvasVisualizer
-              trackRef={localMicTrack}
+              trackRef="local"
               color="#9ca3af" // Tailwind gray-400
             />
           </div>
@@ -334,7 +334,13 @@ function CanvasVisualizer({ trackRef, color }) {
       // 1. Fetch raw audio streams
       if (trackRef === "local") {
         try {
-          localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          localStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+            }
+          });
           mediaStreamTrack = localStream.getAudioTracks()[0];
         } catch (e) {
           console.error("Mic access denied for custom canvas visualizer:", e);
