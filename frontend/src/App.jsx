@@ -291,7 +291,7 @@ function VoiceAssistantUI({ sttProvider = "deepgram" }) {
           {/* User microphone visualizer (gray glow) */}
           <div className="absolute inset-0 flex items-center justify-center opacity-50">
             <CanvasVisualizer
-              trackRef="local"
+              trackRef={localMicTrack}
               color="#9ca3af" // Tailwind gray-400
             />
           </div>

@@ -22,7 +22,7 @@ INTERRUPTION_MIN_WORDS = 0              # Minimum words transcribing before regi
 ENDPOINTING_MIN_DELAY = 0.3             # Delay window (in seconds) from user silence to calling the LLM
 PREEMPTIVE_GENERATION_ENABLED = True    # Begins LLM generation before the user fully stops speaking
 PREEMPTIVE_TTS_ENABLED = True           # Begins TTS audio buffer calculations during active LLM token emission
-USER_AWAY_TIMEOUT = 10.0                # Idle duration (in seconds) of user silence before triggering the fallback prompt
+USER_AWAY_TIMEOUT = 5.0                 # Idle duration (in seconds) of user silence before triggering the fallback prompt
 
 
 # ==============================================================================
